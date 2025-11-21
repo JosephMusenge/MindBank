@@ -1,16 +1,25 @@
-# React + Vite
+# MindBank
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Keep What Inspires You
 
-Currently, two official plugins are available:
+MindBank is a simple way to capture and organize the quotes, ideas, and words that move you—whether they come from a book, a podcast, or just a thought that pops into your head. Just say it out loud or type it in, and MindBank takes care of the rest.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+No complicated tagging. No clutter. MindBank uses Google Gemini AI to do the heavy lifting for sorting and context:
+- Say a single word? The app finds its definition, origin, and example uses.
+- Share a phrase or a memorable quote? MindBank will guess who said it, and offer relevant context or insight.
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- 🎙️ **Speak or Type—It’s Effortless:** Record your thoughts hands-free or jot them down on the go.
+- 🧠 **Smart AI Sorting:** MindBank figures out if you’re sharing a new word or a favorite quote, so you don’t have to organize.
+- 📚 **Lexicon & Quotebook:** Your saved words go into a personal dictionary; inspiring lines and passages fill your quote book.
+- ☁️ **Always Synced:** Everything is stored in the cloud (Firebase), so your thoughts are safe and available wherever you are.
+- 🎨 **Looks Like a Journal:** Enjoy a calming, glassy interface designed with Tailwind CSS and Lucide icons.
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- React (Vite)
+- Tailwind CSS
+- Google Gemini API
+- Firebase (Auth & Firestore)
+- Web Speech API
