@@ -3,9 +3,9 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 // Firebase config from console
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// For Firebase JS SDK v7.20.0 and later
 const firebaseConfig = {
-    apiKey: "AIzaSyCcXE_v3588zzO_gYFSZULJUHjiR1ob1Fo",
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
     authDomain: "mind-bank-app.firebaseapp.com",
     projectId: "mind-bank-app",
     storageBucket: "mind-bank-app.firebasestorage.app",
