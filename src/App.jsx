@@ -57,7 +57,32 @@ export default function App() {
   }, [user]);
 
   // Web Speech API
-  
+  useEffect(() => {
+    // Check browser support
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+
+      recognitionRef.current.onresult = (event) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalTranscript) {
+            setInputText(prev => (prev ? prev + ' ' : '') + finalTranscript);
+        }
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+        setIsRecording(false);
+      };
+    }
+  }, []);
 
   const toggleRecording = () => {
     if (isRecording) {
