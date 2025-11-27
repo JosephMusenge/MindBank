@@ -3,7 +3,7 @@ import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feath
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
-// Import our new local files
+// Import our local files
 import { auth, db } from './lib/firebase';
 import WordCard from './components/WordCard';
 import QuoteCard from './components/QuoteCard';
@@ -14,6 +14,10 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemi
 export default function App() {
   const [user, setUser] = useState(null);
   const [items, setItems] = useState([]);
+  
+  // State to hold the temporary result BEFORE saving
+  const [captureResult, setCaptureResult] = useState(null);
+  
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -38,7 +42,6 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    // Local Path: users -> [userID] -> mindbank_items
     const q = collection(db, 'users', user.uid, 'mindbank_items');
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -46,7 +49,6 @@ export default function App() {
         id: doc.id,
         ...doc.data()
       }));
-      // Client-side sort
       data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setItems(data);
     }, (error) => {
@@ -58,7 +60,6 @@ export default function App() {
 
   // Web Speech API
   useEffect(() => {
-    // Check browser support
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
@@ -94,8 +95,8 @@ export default function App() {
     }
   };
 
-  // AI Analysis with Gemini
-  const analyzeAndSave = async () => {
+  // AI Analysis - Saves to local state
+  const analyzeAndPreview = async () => {
     if (!inputText.trim() || !user) return;
     
     setIsProcessing(true);
@@ -137,14 +138,16 @@ export default function App() {
       const jsonMatch = aiText.match(/\{[\s\S]*\}/);
       const analysis = JSON.parse(jsonMatch ? jsonMatch[0] : aiText);
 
-      await addDoc(collection(db, 'users', user.uid, 'mindbank_items'), {
+      // Save to TEMP state (Preview)
+      setCaptureResult({
+        id: 'temp-preview', 
         text: inputText,
         analysis,
         type: analysis.type,
         author: analysis.author || '',
         source: analysis.source || '',
         inQuotebook: false, 
-        createdAt: serverTimestamp()
+        createdAt: new Date()
       });
 
       setInputText('');
@@ -156,6 +159,34 @@ export default function App() {
   };
 
   // --- Actions ---
+  // Explicitly save the previewed item to Firestore
+  const saveToLibrary = async (asFavorite = false) => {
+    if (!captureResult || !user) return;
+    
+    try {
+      const { id, ...dataToSave } = captureResult;
+      
+      await addDoc(collection(db, 'users', user.uid, 'mindbank_items'), {
+        ...dataToSave,
+        inQuotebook: asFavorite, 
+        createdAt: serverTimestamp()
+      });
+      
+      setCaptureResult(null); // Clear the preview
+    } catch (error) {
+      console.error("Error saving to library:", error);
+    }
+  };
+
+  const discardPreview = () => {
+    setCaptureResult(null);
+  };
+
+  const updatePreviewItem = (id, data) => {
+    setCaptureResult(prev => ({ ...prev, ...data }));
+  };
+
+  // --- Existing Firestore Actions ---
   const deleteItem = async (id) => {
     if(!user) return;
     await deleteDoc(doc(db, 'users', user.uid, 'mindbank_items', id));
@@ -183,9 +214,15 @@ export default function App() {
   };
 
   const filteredItems = items.filter(item => {
-    if (filter === 'all') return true;
+    if (filter === 'all') {
+      // "Clean Feed" Logic:
+      // Exclude items that are already in the Quotebook
+      // AND exclude items that are Words (which go to Lexicon)
+      // This view now acts as an "Inbox" for anything that hasn't been sorted yet.
+      return !item.inQuotebook && item.type !== 'word';
+    }
     if (filter === 'quotebook') return item.inQuotebook === true;
-    return item.type === filter;
+    return item.type === filter; // 'word' tab shows words
   });
 
   const hasDeletableItems = items.some(item => !item.inQuotebook && item.type !== 'word');
@@ -193,7 +230,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FDFCF8] text-stone-900 font-sans pb-32 selection:bg-indigo-100 selection:text-indigo-900">
       
-      {/* Premium Sticky Header */}
+      {/* Header */}
       <header className="sticky top-0 z-20 backdrop-blur-md bg-[#FDFCF8]/90 border-b border-stone-200/60 transition-all">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 text-stone-800 group cursor-pointer">
@@ -209,7 +246,7 @@ export default function App() {
                 onClick={() => setFilter('all')}
                 className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'all' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-900 hover:bg-stone-200/50'}`}
               >
-                Feed
+                Library
               </button>
               <button 
                 onClick={() => setFilter('quotebook')}
@@ -225,7 +262,6 @@ export default function App() {
               </button>
             </nav>
             
-            {/* Mobile Menu / Clear Button */}
             {filter === 'all' && (
                 <button 
                     onClick={clearFeed}
@@ -242,20 +278,18 @@ export default function App() {
             )}
           </div>
         </div>
-        
-        {/* Mobile Sub-nav (Visible only on small screens) */}
         <div className="sm:hidden flex justify-around pb-3 px-4 border-t border-stone-100 pt-3">
-             <button onClick={() => setFilter('all')} className={`text-sm font-medium ${filter === 'all' ? 'text-stone-900' : 'text-stone-400'}`}>Feed</button>
+             <button onClick={() => setFilter('all')} className={`text-sm font-medium ${filter === 'all' ? 'text-stone-900' : 'text-stone-400'}`}>Library</button>
              <button onClick={() => setFilter('quotebook')} className={`text-sm font-medium ${filter === 'quotebook' ? 'text-rose-600' : 'text-stone-400'}`}>Quotebook</button>
-             <button onClick={() => setFilter('word')} className={`text-sm font-medium ${filter === 'word' ? 'text-indigo-600' : 'text-stone-400'}`}>Dictionary</button>
+             <button onClick={() => setFilter('word')} className={`text-sm font-medium ${filter === 'word' ? 'text-indigo-600' : 'text-stone-400'}`}>Lexicon</button>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
         
-        {/* Floating Input Composer */}
-        {filter !== 'quotebook' && (
-            <div className="relative group">
+        {/* 1. INPUT AREA */}
+        {filter !== 'quotebook' && !captureResult && (
+            <div className="relative group animate-in fade-in slide-in-from-top-4 duration-500">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-300 to-violet-300 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
                 <div className="relative bg-white rounded-3xl shadow-xl shadow-indigo-900/5 border border-stone-100 p-1 overflow-hidden transition-transform">
                     <textarea
@@ -282,7 +316,7 @@ export default function App() {
                         </div>
 
                         <button
-                            onClick={analyzeAndSave}
+                            onClick={analyzeAndPreview}
                             disabled={!inputText.trim() || isProcessing}
                             className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-sm tracking-wide transition-all transform active:scale-95 ${
                                 !inputText.trim() || isProcessing
@@ -307,54 +341,82 @@ export default function App() {
             </div>
         )}
 
-        {/* Feed Header */}
-        <div className="flex items-center justify-between pb-2 border-b border-stone-200/60">
-            <h2 className="text-sm font-bold text-stone-400 uppercase tracking-wider">
-                {filter === 'all' && 'Recent Captures'}
-                {filter === 'quotebook' && 'Curated Collection'}
-                {filter === 'word' && 'Personal Lexicon'}
-            </h2>
-            <span className="text-xs font-medium text-stone-300">{filteredItems.length} items</span>
-        </div>
-
-        {/* Content Feed */}
-        <div className="space-y-6 min-h-[300px]">
-          {items.length === 0 && !isProcessing && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-24 h-24 bg-gradient-to-br from-stone-100 to-white rounded-full flex items-center justify-center mb-6 border border-stone-100 shadow-inner">
-                <BookOpen className="text-stone-300 w-10 h-10" />
+        {/* 2. PREVIEW AREA */}
+        {captureResult && (
+           <div className="animate-in fade-in zoom-in-95 duration-300">
+              <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-bold text-stone-400 uppercase tracking-wider flex items-center gap-2">
+                    <Sparkles size={16} className="text-indigo-500" />
+                    New Capture Preview
+                  </h2>
               </div>
-              <h3 className="text-xl font-serif font-bold text-stone-800 mb-2">Your MindBank is Empty</h3>
-              <p className="text-stone-500 max-w-xs leading-relaxed">
-                Start building your second brain. Capture a quote or learn a new word today.
-              </p>
-            </div>
-          )}
 
-          {filter === 'quotebook' && filteredItems.length === 0 && items.length > 0 && (
-             <div className="flex flex-col items-center justify-center py-16 px-8 border-2 border-dashed border-stone-200 rounded-3xl bg-stone-50/50">
-                <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                    <Heart className="w-8 h-8 text-rose-200" />
+              {/* Render the Card based on type */}
+              {captureResult.type === 'word' ? (
+                <WordCard 
+                    item={captureResult} 
+                    isPreview={true} 
+                    onSave={() => saveToLibrary(false)} 
+                    onDiscard={discardPreview} 
+                />
+              ) : (
+                <QuoteCard 
+                  item={captureResult} 
+                  isPreview={true}
+                  onSave={() => saveToLibrary(true)} // Save as favorite immediately
+                  onDiscard={discardPreview} 
+                  onUpdate={updatePreviewItem} 
+                  onToggleQuotebook={() => {}}
+                  showInsight={true}
+                />
+              )}
+              
+              <div className="my-8 border-b border-stone-200/60 w-full"></div>
+           </div>
+        )}
+
+        {/* 3. FEED / LIBRARY LIST */}
+        {!captureResult && (
+            <>
+                <div className="flex items-center justify-between pb-2 border-b border-stone-200/60">
+                    <h2 className="text-sm font-bold text-stone-400 uppercase tracking-wider">
+                        {filter === 'all' && 'Your Library'}
+                        {filter === 'quotebook' && 'Curated Collection'}
+                        {filter === 'word' && 'Personal Lexicon'}
+                    </h2>
+                    <span className="text-xs font-medium text-stone-300">{filteredItems.length} items</span>
                 </div>
-                <p className="text-stone-500 font-medium text-center">Your collection is waiting for its first gem.</p>
-             </div>
-          )}
 
-          <div className="space-y-6">
-            {filteredItems.map((item) => (
-                item.type === 'word' 
-                ? <WordCard key={item.id} item={item} onDelete={deleteItem} />
-                : <QuoteCard 
-                    key={item.id} 
-                    item={item} 
-                    onDelete={deleteItem} 
-                    onUpdate={updateItem}
-                    onToggleQuotebook={toggleQuotebook}
-                    showInsight={filter !== 'quotebook'}
-                    />
-            ))}
-          </div>
-        </div>
+                <div className="space-y-6 min-h-[300px]">
+                {items.length === 0 && !isProcessing && (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-24 h-24 bg-gradient-to-br from-stone-100 to-white rounded-full flex items-center justify-center mb-6 border border-stone-100 shadow-inner">
+                        <BookOpen className="text-stone-300 w-10 h-10" />
+                    </div>
+                    <h3 className="text-xl font-serif font-bold text-stone-800 mb-2">Your Library is Empty</h3>
+                    <p className="text-stone-500 max-w-xs leading-relaxed">
+                        Captures you save will appear here.
+                    </p>
+                    </div>
+                )}
+
+                <div className="space-y-6">
+                    {filteredItems.map((item) => (
+                        item.type === 'word' 
+                        ? <WordCard key={item.id} item={item} onDelete={deleteItem} />
+                        : <QuoteCard 
+                            key={item.id} 
+                            item={item} 
+                            onDelete={deleteItem} 
+                            onUpdate={updateItem}
+                            onToggleQuotebook={toggleQuotebook}
+                            showInsight={filter !== 'quotebook'}
+                            />
+                    ))}
+                </div>
+                </div>
+            </>
+        )}
       </main>
     </div>
   );
