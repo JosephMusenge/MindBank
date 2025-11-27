@@ -95,7 +95,65 @@ export default function App() {
   };
 
   // AI Analysis with Gemini
-  
+  const analyzeAndSave = async () => {
+    if (!inputText.trim() || !user) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      const prompt = `
+        Analyze this text: "${inputText}".
+        Determine if it is a single word/short idiom to be defined, or a quote/thought.
+        If it is a quote, try to identify the author and source (book/movie/speech) if known.
+        
+        Return ONLY a JSON object with this schema:
+        {
+          "type": "word" | "quote",
+          "definition": "dictionary definition if word",
+          "partOfSpeech": "noun/verb/etc if word",
+          "example": "example sentence if word",
+          "meaning": "explanation of the quote's significance if quote",
+          "author": "Author Name if known quote, else null",
+          "source": "Book Title/Source if known quote, else null",
+          "tags": ["array", "of", "3", "relevant", "tags"]
+        }
+      `;
+
+      const response = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!data.candidates || !data.candidates[0]?.content) {
+        throw new Error("AI Analysis failed");
+      }
+
+      const aiText = data.candidates[0].content.parts[0].text;
+      const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+      const analysis = JSON.parse(jsonMatch ? jsonMatch[0] : aiText);
+
+      await addDoc(collection(db, 'users', user.uid, 'mindbank_items'), {
+        text: inputText,
+        analysis,
+        type: analysis.type,
+        author: analysis.author || '',
+        source: analysis.source || '',
+        inQuotebook: false, 
+        createdAt: serverTimestamp()
+      });
+
+      setInputText('');
+    } catch (error) {
+      console.error("Analysis failed:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // --- Actions ---
   const deleteItem = async (id) => {
