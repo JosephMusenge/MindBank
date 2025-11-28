@@ -66,18 +66,17 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
                     <span className="text-stone-900 font-semibold text-base">— {item.author || 'Unknown Author'}</span>
                     {item.source && <span className="text-stone-500 text-sm italic">{item.source}</span>}
                 </div>
-                {!isPreview && (
-                    <button 
-                    onClick={() => {
-                        setEditAuthor(item.author || '');
-                        setEditSource(item.source || '');
-                        setIsEditing(true);
-                    }}
-                    className="text-xs text-stone-400 hover:text-stone-800 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-stone-50 px-2 py-1 rounded-md"
-                    >
-                    <Edit2 size={12} /> Edit
-                    </button>
-                )}
+                {/* make the edit btn visible in preview mode */}
+                <button 
+                  onClick={() => {
+                      setEditAuthor(item.author || '');
+                      setEditSource(item.source || '');
+                      setIsEditing(true);
+                  }}
+                  className={`text-xs text-stone-400 hover:text-stone-800 transition-opacity flex items-center gap-1 bg-stone-50 px-2 py-1 rounded-md ${isPreview ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                >
+                  <Edit2 size={12} /> Edit
+                </button>
               </div>
             )}
           </div>
