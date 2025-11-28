@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { Toaster, toast } from 'sonner';
 
 // Import our local files
 import { auth, db } from './lib/firebase';
@@ -17,7 +18,6 @@ export default function App() {
   
   // State to hold the temporary result BEFORE saving
   const [captureResult, setCaptureResult] = useState(null);
-  
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -173,13 +173,18 @@ export default function App() {
       });
       
       setCaptureResult(null); // Clear the preview
+      // Success Toast
+      const destination = asFavorite ? "Quotebook" : "Dictionary";
+      toast.success(`Saved to ${destination}`);
     } catch (error) {
       console.error("Error saving to library:", error);
+      toast.error("Failed to save item.");
     }
   };
 
   const discardPreview = () => {
     setCaptureResult(null);
+    toast.info("Preview discarded");
   };
 
   const updatePreviewItem = (id, data) => {
@@ -189,7 +194,13 @@ export default function App() {
   // --- Existing Firestore Actions ---
   const deleteItem = async (id) => {
     if(!user) return;
-    await deleteDoc(doc(db, 'users', user.uid, 'mindbank_items', id));
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'mindbank_items', id));
+      toast.success("Item deleted");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not delete item");
+    }
   };
 
   const updateItem = async (id, data) => {
@@ -198,7 +209,12 @@ export default function App() {
   };
 
   const toggleQuotebook = async (id, status) => {
-    updateItem(id, { inQuotebook: status });
+    try {
+      await updateItem(id, { inQuotebook: status });
+      toast.success(status ? "Added to Quotebook" : "Removed from Quotebook");
+    } catch (error) {
+      toast.error("Update failed");
+    }
   };
 
   const clearFeed = async () => {
@@ -207,17 +223,22 @@ export default function App() {
     if (itemsToDelete.length === 0) return;
     if (!confirm(`Clear ${itemsToDelete.length} unsaved items from the feed?`)) return;
     
-    const deletePromises = itemsToDelete.map(item => 
-      deleteDoc(doc(db, 'users', user.uid, 'mindbank_items', item.id))
-    );
-    await Promise.all(deletePromises);
+    try {
+      const deletePromises = itemsToDelete.map(item => 
+        deleteDoc(doc(db, 'users', user.uid, 'mindbank_items', item.id))
+      );
+      await Promise.all(deletePromises);
+      toast.success("Inbox cleared");
+    } catch (error) {
+      toast.error("Failed to clear inbox");
+    }
   };
 
   const filteredItems = items.filter(item => {
     if (filter === 'all') {
       // "Clean Feed" Logic:
       // Exclude items that are already in the Quotebook
-      // AND exclude items that are Words (which go to Lexicon)
+      // AND exclude items that are Words (which go to Dictionary)
       // This view now acts as an "Inbox" for anything that hasn't been sorted yet.
       return !item.inQuotebook && item.type !== 'word';
     }
@@ -231,6 +252,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FDFCF8] text-stone-900 font-sans pb-32 selection:bg-indigo-100 selection:text-indigo-900">
+      {/* Toast Notification Container */}
+      <Toaster position="bottom-center" richColors />
       
       {/* Header */}
       <header className="sticky top-0 z-20 backdrop-blur-md bg-[#FDFCF8]/90 border-b border-stone-200/60 transition-all">
@@ -246,7 +269,7 @@ export default function App() {
             <nav className="hidden sm:flex bg-stone-100/80 p-1 rounded-xl">
               <button onClick={() => setFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'all' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-900 hover:bg-stone-200/50'}`}>Library</button>
               <button onClick={() => setFilter('quotebook')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'quotebook' ? 'bg-white text-rose-600 shadow-sm' : 'text-stone-500 hover:text-rose-600 hover:bg-stone-200/50'}`}><Heart size={14} className={filter === 'quotebook' ? "fill-current" : ""} /> Quotebook</button>
-              <button onClick={() => setFilter('word')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'word' ? 'bg-white text-indigo-600 shadow-sm' : 'text-stone-500 hover:text-indigo-600 hover:bg-stone-200/50'}`}>Lexicon</button>
+              <button onClick={() => setFilter('word')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'word' ? 'bg-white text-indigo-600 shadow-sm' : 'text-stone-500 hover:text-indigo-600 hover:bg-stone-200/50'}`}>Dictionary</button>
             </nav>
             {filter === 'all' && hasDeletableItems && (
                 <button onClick={clearFeed} className="w-9 h-9 flex items-center justify-center rounded-full transition-all border bg-white border-stone-200 text-stone-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 shadow-sm cursor-pointer" title="Clear unsaved"><Eraser size={16} /></button>
@@ -256,14 +279,14 @@ export default function App() {
         <div className="sm:hidden flex justify-around pb-3 px-4 border-t border-stone-100 pt-3">
              <button onClick={() => setFilter('all')} className={`text-sm font-medium ${filter === 'all' ? 'text-stone-900' : 'text-stone-400'}`}>Library</button>
              <button onClick={() => setFilter('quotebook')} className={`text-sm font-medium ${filter === 'quotebook' ? 'text-rose-600' : 'text-stone-400'}`}>Quotebook</button>
-             <button onClick={() => setFilter('word')} className={`text-sm font-medium ${filter === 'word' ? 'text-indigo-600' : 'text-stone-400'}`}>Lexicon</button>
+             <button onClick={() => setFilter('word')} className={`text-sm font-medium ${filter === 'word' ? 'text-indigo-600' : 'text-stone-400'}`}>Dictionary</button>
         </div>
       </header>
 
       {/* Main Container - Applies Flex Center if IdleCentered is true */}
       <main className={`max-w-3xl mx-auto px-4 ${isIdleCentered ? 'min-h-[75vh] flex flex-col justify-center' : 'py-8 space-y-8'}`}>
         
-        {/* 1. INPUT AREA - Centered when idle, Top when active */}
+        {/* INPUT AREA */}
         {filter !== 'quotebook' && !captureResult && (
             <div className={`relative group animate-in fade-in duration-700 ${isIdleCentered ? 'w-full transform -translate-y-8' : 'slide-in-from-top-4'}`}>
                 <div className={`absolute -inset-0.5 bg-gradient-to-r from-indigo-300 to-violet-300 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-500`}></div>
@@ -289,7 +312,7 @@ export default function App() {
             </div>
         )}
 
-        {/* 1.5. EMPTY STATE STATUS (Only when Centered) */}
+        {/* EMPTY STATE STATUS (Only when Centered) */}
         {isIdleCentered && (
              <div className="text-center animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
                 {items.length === 0 ? (
@@ -303,7 +326,7 @@ export default function App() {
              </div>
         )}
 
-        {/* 2. PREVIEW AREA */}
+        {/* PREVIEW AREA */}
         {captureResult && (
            <div className="animate-in fade-in zoom-in-95 duration-300">
               <div className="flex items-center justify-between mb-4">
@@ -321,14 +344,14 @@ export default function App() {
            </div>
         )}
 
-        {/* 3. FEED / LIBRARY LIST (Only show if NOT centered) */}
+        {/* FEED / LIBRARY LIST */}
         {!captureResult && !isIdleCentered && (
             <>
                 <div className="flex items-center justify-between pb-2 border-b border-stone-200/60">
                     <h2 className="text-sm font-bold text-stone-400 uppercase tracking-wider">
                         {filter === 'all' && 'Inbox'}
                         {filter === 'quotebook' && 'Curated Collection'}
-                        {filter === 'word' && 'Personal Lexicon'}
+                        {filter === 'word' && 'Personal Dictionary'}
                     </h2>
                     <span className="text-xs font-medium text-stone-300">{filteredItems.length} items</span>
                 </div>
