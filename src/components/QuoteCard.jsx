@@ -1,14 +1,32 @@
 import React, { useState } from 'react';
-import { Trash2, Sparkles, Quote, Heart, Edit2, Check, X, BookMarked, XCircle } from 'lucide-react';
+import { Trash2, Sparkles, Quote, Heart, Edit2, Check, X, BookMarked, XCircle, Volume2, StopCircle } from 'lucide-react';
 
 const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = true, isPreview = false, onSave, onDiscard }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [editAuthor, setEditAuthor] = useState(item.author || '');
   const [editSource, setEditSource] = useState(item.source || '');
 
   const handleSave = () => {
     onUpdate(item.id, { author: editAuthor, source: editSource });
     setIsEditing(false);
+  };
+
+  // Handle Text-to-Speech for quote and word readings
+  const handleSpeak = () => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(item.text);
+    // Set a nice voice if available
+    utterance.rate = 0.9; 
+    utterance.onend = () => setIsSpeaking(false);
+    
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
   };
 
   return (
@@ -26,6 +44,15 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
             <span className={`text-xs font-bold tracking-wider uppercase ${item.inQuotebook ? 'text-rose-500' : 'text-emerald-600'}`}>
               {isPreview ? 'New Discovery' : (item.inQuotebook ? 'Collection' : 'Library')}
             </span>
+
+            {/* Audio Button */}
+            <button 
+              onClick={handleSpeak}
+              className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+              title="Read Aloud"
+            >
+              {isSpeaking ? <StopCircle size={18} /> : <Volume2 size={18} />}
+            </button>
           </div>
           
           {/* Quote Text */}
