@@ -1,13 +1,34 @@
 import React, { useState, useRef } from 'react';
-import { Trash2, Sparkles, Quote, Heart, Edit2, Check, X, BookMarked, XCircle, Volume2, StopCircle, Share2, Copy, Download, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Sparkles, Quote, Heart, Edit2, Check, X, BookMarked, XCircle, Volume2, StopCircle, Share2, Copy, Download, Image as ImageIcon, Globe, Loader2  } from 'lucide-react';
 import { toast } from 'sonner';
 import { toPng } from 'html-to-image';
+
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+
+const LANGUAGES = [
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'it', label: 'Italian' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'ar', label: 'Arabic' },
+];
 
 const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = true, isPreview = false, onSave, onDiscard }) => {
   const cardRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  // Translation State
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translation, setTranslation] = useState(null); // { text: string, lang: string }
+
   const [editAuthor, setEditAuthor] = useState(item.author || '');
   const [editSource, setEditSource] = useState(item.source || '');
 
@@ -17,18 +38,44 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
   };
 
   // Handle Text-to-Speech for quote and word readings
-  const handleSpeak = () => {
+  const handleSpeak = (textToSpeak) => {
     if (isSpeaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(item.text);
+    const utterance = new SpeechSynthesisUtterance(textToSpeak || item.text);
     utterance.rate = 0.9; 
     utterance.onend = () => setIsSpeaking(false);
     setIsSpeaking(true);
     window.speechSynthesis.speak(utterance);
+  };
+
+  const handleTranslate = async (langName) => {
+    setShowLangMenu(false);
+    setIsTranslating(true);
+    
+    try {
+      const prompt = `Translate the following quote into ${langName}. Return ONLY the translated text, nothing else. Text: "${item.text}"`;
+      
+      const response = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      
+      const data = await response.json();
+      const translatedText = data.candidates[0].content.parts[0].text.trim();
+      
+      setTranslation({ text: translatedText, lang: langName });
+      toast.success(`Translated to ${langName}`);
+    } catch (error) {
+      console.error("Translation failed", error);
+      toast.error("Translation failed. Try again.");
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   // Share quotes functions
@@ -41,8 +88,7 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
 
   const downloadImage = async () => {
     if (cardRef.current === null) return;
-    
-    // Show a loading toast because image generation can take ~500ms
+    // Show a loading toast
     const toastId = toast.loading("Generating image...");
 
     try {
@@ -63,7 +109,6 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
       link.download = `mindbank-quote-${item.id}.png`;
       link.href = dataUrl;
       link.click();
-      
       toast.dismiss(toastId);
       toast.success("Image saved to downloads");
     } catch (err) {
@@ -98,10 +143,39 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
 
             {/* Header Tools (Audio + Share) - Excluded from Image Share */}
             <div className="flex items-center gap-1 share-exclude">
+                {/* Translate Menu */}
+                <div className="relative">
+                   <button
+                     onClick={() => setShowLangMenu(!showLangMenu)}
+                     className={`p-2 rounded-full transition-colors ${showLangMenu || translation ? 'bg-indigo-50 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+                     title="Translate"
+                   >
+                     {isTranslating ? <Loader2 size={18} className="animate-spin" /> : <Globe size={18} />}
+                   </button>
+                   
+                   {showLangMenu && (
+                     <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowLangMenu(false)} />
+                        <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-xl border border-stone-100 z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-60 overflow-y-auto">
+                            <div className="px-3 py-2 text-xs font-bold text-stone-400 uppercase tracking-wider bg-stone-50 border-b border-stone-100">Translate to</div>
+                            {LANGUAGES.map(lang => (
+                                <button 
+                                    key={lang.code}
+                                    onClick={() => handleTranslate(lang.label)}
+                                    className="w-full text-left px-4 py-2 text-sm text-stone-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                                >
+                                    {lang.label}
+                                </button>
+                            ))}
+                        </div>
+                     </>
+                   )}
+                </div>
+
                 <button 
-                  onClick={handleSpeak}
+                  onClick={() => handleSpeak(translation ? translation.text : item.text)}
                   className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
-                  title="Read Aloud"
+                  title={translation ? "Read Translation" : "Read Aloud"}
                 >
                   {isSpeaking ? <StopCircle size={18} /> : <Volume2 size={18} />}
                 </button>
@@ -137,6 +211,17 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
           <blockquote className="text-xl md:text-2xl font-serif text-stone-800 leading-relaxed mb-4">
             "{item.text}"
           </blockquote>
+
+          {/* Translation Display */}
+          {translation && (
+              <div className="mb-6 bg-indigo-50/50 rounded-xl p-4 border border-indigo-100 relative group/trans">
+                  <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">{translation.lang} Translation</span>
+                      <button onClick={() => setTranslation(null)} className="text-indigo-300 hover:text-indigo-500"><X size={14}/></button>
+                  </div>
+                  <p className="text-lg font-serif text-indigo-900 italic">"{translation.text}"</p>
+              </div>
+          )}
 
           {/* Metadata Section */}
           <div className="mb-6">
