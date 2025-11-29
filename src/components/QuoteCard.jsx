@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { Trash2, Sparkles, Quote, Heart, Edit2, Check, X, BookMarked, XCircle, Volume2, StopCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Trash2, Sparkles, Quote, Heart, Edit2, Check, X, BookMarked, XCircle, Volume2, StopCircle, Share2, Copy, Download, Image as ImageIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { toPng } from 'html-to-image';
 
 const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = true, isPreview = false, onSave, onDiscard }) => {
+  const cardRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const [editAuthor, setEditAuthor] = useState(item.author || '');
   const [editSource, setEditSource] = useState(item.source || '');
 
@@ -21,49 +25,123 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
     }
 
     const utterance = new SpeechSynthesisUtterance(item.text);
-    // Set a nice voice if available
     utterance.rate = 0.9; 
     utterance.onend = () => setIsSpeaking(false);
-    
     setIsSpeaking(true);
     window.speechSynthesis.speak(utterance);
   };
 
+  // Share quotes functions
+  const copyText = () => {
+    const textToShare = `"${item.text}" — ${item.author || 'Unknown'}`;
+    navigator.clipboard.writeText(textToShare);
+    toast.success("Quote copied to clipboard");
+    setShowShareMenu(false);
+  };
+
+  const downloadImage = async () => {
+    if (cardRef.current === null) return;
+    
+    // Show a loading toast because image generation can take ~500ms
+    const toastId = toast.loading("Generating image...");
+
+    try {
+      const dataUrl = await toPng(cardRef.current, {
+        cacheBust: true,
+        backgroundColor: '#ffffff', 
+        filter: (node) => {
+          // Exclude elements with the 'share-exclude' class (like buttons)
+          return !node.classList?.contains('share-exclude');
+        },
+        style: {
+           margin: '0', // Reset margins for the snapshot
+           transform: 'none' // Remove hover transforms if active
+        }
+      });
+
+      const link = document.createElement('a');
+      link.download = `mindbank-quote-${item.id}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      toast.dismiss(toastId);
+      toast.success("Image saved to downloads");
+    } catch (err) {
+      console.error(err);
+      toast.dismiss(toastId);
+      toast.error("Failed to generate image");
+    } finally {
+      setShowShareMenu(false);
+    }
+  };
+
   return (
-    <div className={`bg-white rounded-2xl p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all border border-stone-100 mb-4 group relative overflow-hidden`}>
+    <div 
+        ref={cardRef}
+        className={`bg-white rounded-2xl p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all border border-stone-100 mb-4 group relative overflow-hidden`}
+    >
       {/* Colored Top Border Indicator */}
       <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${item.inQuotebook ? 'from-rose-400 to-pink-500' : 'from-emerald-400 to-teal-500'} opacity-80`}></div>
       
       <div className="flex justify-between items-start">
-        <div className="w-full">
-          {/* Header Label */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className={`p-1.5 rounded-full ${item.inQuotebook ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
-               {item.inQuotebook ? <BookMarked size={14} /> : <Quote size={14} />}
+      <div className="w-full">
+          {/* Header Label + Buttons */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-full ${item.inQuotebook ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                {item.inQuotebook ? <BookMarked size={14} /> : <Quote size={14} />}
+                </div>
+                <span className={`text-xs font-bold tracking-wider uppercase ${item.inQuotebook ? 'text-rose-500' : 'text-emerald-600'}`}>
+                {isPreview ? 'New Discovery' : (item.inQuotebook ? 'Collection' : 'Library')}
+                </span>
             </div>
-            <span className={`text-xs font-bold tracking-wider uppercase ${item.inQuotebook ? 'text-rose-500' : 'text-emerald-600'}`}>
-              {isPreview ? 'New Discovery' : (item.inQuotebook ? 'Collection' : 'Library')}
-            </span>
 
-            {/* Audio Button */}
-            <button 
-              onClick={handleSpeak}
-              className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
-              title="Read Aloud"
-            >
-              {isSpeaking ? <StopCircle size={18} /> : <Volume2 size={18} />}
-            </button>
+            {/* Header Tools (Audio + Share) - Excluded from Image Share */}
+            <div className="flex items-center gap-1 share-exclude">
+                <button 
+                  onClick={handleSpeak}
+                  className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+                  title="Read Aloud"
+                >
+                  {isSpeaking ? <StopCircle size={18} /> : <Volume2 size={18} />}
+                </button>
+
+                {/* Share Menu */}
+                <div className="relative">
+                    <button 
+                        onClick={() => setShowShareMenu(!showShareMenu)}
+                        className={`p-2 rounded-full transition-colors ${showShareMenu ? 'bg-stone-100 text-stone-600' : 'text-stone-300 hover:text-stone-600 hover:bg-stone-100'}`}
+                        title="Share"
+                    >
+                        <Share2 size={18} />
+                    </button>
+                    
+                    {/* Dropdown */}
+                    {showShareMenu && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={() => setShowShareMenu(false)} />
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-stone-100 z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                <button onClick={copyText} className="w-full text-left px-4 py-3 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2 transition-colors">
+                                    <Copy size={16} /> Copy Text
+                                </button>
+                                <button onClick={downloadImage} className="w-full text-left px-4 py-3 text-sm text-stone-600 hover:bg-stone-50 flex items-center gap-2 transition-colors border-t border-stone-50">
+                                    <ImageIcon size={16} /> Save Image
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
           </div>
           
-          {/* Quote Text */}
           <blockquote className="text-xl md:text-2xl font-serif text-stone-800 leading-relaxed mb-4">
             "{item.text}"
           </blockquote>
 
-          {/* Metadata Section (Author/Source) */}
+          {/* Metadata Section */}
           <div className="mb-6">
             {isEditing ? (
-              <div className="bg-stone-50 p-4 rounded-xl space-y-3 border border-stone-200 animate-in fade-in slide-in-from-top-2">
+              <div className="bg-stone-50 p-4 rounded-xl space-y-3 border border-stone-200 animate-in fade-in slide-in-from-top-2 share-exclude">
                 <input
                   type="text"
                   value={editAuthor}
@@ -93,14 +171,14 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
                     <span className="text-stone-900 font-semibold text-base">— {item.author || 'Unknown Author'}</span>
                     {item.source && <span className="text-stone-500 text-sm italic">{item.source}</span>}
                 </div>
-                {/* make the edit btn visible in preview mode */}
+                
                 <button 
                   onClick={() => {
                       setEditAuthor(item.author || '');
                       setEditSource(item.source || '');
                       setIsEditing(true);
                   }}
-                  className={`text-xs text-stone-400 hover:text-stone-800 transition-opacity flex items-center gap-1 bg-stone-50 px-2 py-1 rounded-md ${isPreview ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                  className={`share-exclude text-xs text-stone-400 hover:text-stone-800 transition-opacity flex items-center gap-1 bg-stone-50 px-2 py-1 rounded-md ${isPreview ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                 >
                   <Edit2 size={12} /> Edit
                 </button>
@@ -108,7 +186,7 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
             )}
           </div>
 
-          {/* AI Insight - Conditionally Rendered */}
+          {/* AI Insight */}
           {showInsight && (
             <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100/50 mb-4">
               <h4 className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5 mb-2">
@@ -120,7 +198,7 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
             </div>
           )}
 
-          {/* Footer Actions */}
+          {/* Footer Actions (Tags + Buttons) */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-stone-50">
             <div className="flex gap-2 flex-wrap">
                 {item.analysis?.tags?.map((tag, idx) => (
@@ -130,49 +208,51 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
                 ))}
             </div>
             
-            {/* ACTION BUTTONS */}
-            {isPreview ? (
-                // PREVIEW MODE BUTTONS
-                <div className="flex gap-3">
-                    <button 
-                        onClick={onDiscard}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold bg-stone-100 text-stone-500 hover:bg-red-50 hover:text-red-600 transition-all"
-                    >
-                        <XCircle size={14} />
-                        Discard
-                    </button>
-                    <button 
-                        onClick={onSave}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 shadow-md shadow-rose-200 transition-all transform active:scale-95"
-                    >
-                        <Heart size={14} className="fill-current" />
-                        Save to Quotebook
-                    </button>
-                </div>
-            ) : (
-                // NORMAL MODE BUTTONS
-                <div className="flex gap-2">
-                    <button 
-                        onClick={() => onToggleQuotebook(item.id, !item.inQuotebook)}
-                        className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
-                            item.inQuotebook 
-                            ? 'bg-rose-100 text-rose-600 shadow-sm' 
-                            : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
-                        }`}
-                    >
-                        <Heart size={14} className={item.inQuotebook ? "fill-current" : ""} />
-                        {item.inQuotebook ? 'Saved' : 'Save to Book'}
-                    </button>
-                </div>
-            )}
+            {/* ACTION BUTTONS - Hidden during Share Snapshot */}
+            <div className="share-exclude">
+                {isPreview ? (
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={onDiscard}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold bg-stone-100 text-stone-500 hover:bg-red-50 hover:text-red-600 transition-all"
+                        >
+                            <XCircle size={14} />
+                            Discard
+                        </button>
+                        <button 
+                            onClick={onSave}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold bg-rose-500 text-white hover:bg-rose-600 shadow-md shadow-rose-200 transition-all transform active:scale-95"
+                        >
+                            <Heart size={14} className="fill-current" />
+                            Save to Quotebook
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => onToggleQuotebook(item.id, !item.inQuotebook)}
+                            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
+                                item.inQuotebook 
+                                ? 'bg-rose-100 text-rose-600 shadow-sm' 
+                                : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+                            }`}
+                        >
+                            <Heart size={14} className={item.inQuotebook ? "fill-current" : ""} />
+                            {item.inQuotebook ? 'Saved' : 'Save to Book'}
+                        </button>
+                    </div>
+                )}
+            </div>
           </div>
         </div>
         
         {/* Only show trash icon in normal mode */}
         {!isPreview && (
-            <button onClick={() => onDelete(item.id)} className="text-stone-300 hover:text-red-400 hover:bg-red-50 p-2 rounded-full transition-all ml-2">
-            <Trash2 size={18} />
-            </button>
+            <div className="share-exclude ml-2">
+                <button onClick={() => onDelete(item.id)} className="text-stone-300 hover:text-red-400 hover:bg-red-50 p-2 rounded-full transition-all">
+                <Trash2 size={18} />
+                </button>
+             </div>
         )}
       </div>
     </div>
