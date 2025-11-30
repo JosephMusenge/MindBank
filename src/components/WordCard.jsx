@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Trash2, Save, XCircle, Volume2, StopCircle, Globe, Loader2, X } from 'lucide-react';
+import { playAiAudio } from '../lib/audioService';
+import { toast } from 'sonner';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
@@ -23,20 +25,40 @@ const WordCard = ({ item, onDelete, isPreview = false, onSave, onDiscard }) => {
   const [isTranslating, setIsTranslating] = useState(false);
   const [translation, setTranslation] = useState(null);
 
-  const handleSpeak = (textToSpeak) => {
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const audioRef = useRef(null);
+
+  const handleSpeak = async (textToSpeak) => {
+    if (isSpeaking || isLoadingAudio) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
       setIsSpeaking(false);
+      setIsLoadingAudio(false);
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak || item.text);
-    // slightly slower rate for definitions/words to ensure clarity
-    utterance.rate = 0.8; 
-    utterance.onend = () => setIsSpeaking(false);
-    
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+    setIsLoadingAudio(true);
+
+    try {
+      // use 'alloy' for words 
+      const audio = await playAiAudio(textToSpeak || item.text, 'alloy');
+      
+      audioRef.current = audio;
+      setIsSpeaking(true);
+      setIsLoadingAudio(false);
+      
+      // Reset state when audio finishes
+      audio.onended = () => {
+        setIsSpeaking(false);
+        audioRef.current = null;
+      };
+    } catch (error) {
+      toast.error("Audio failed");
+      setIsLoadingAudio(false);
+      setIsSpeaking(false);
+    }
   };
 
   const handleTranslate = async (langName) => {
@@ -113,11 +135,25 @@ const WordCard = ({ item, onDelete, isPreview = false, onSave, onDiscard }) => {
 
                 {/* Audion Btn */}
                 <button 
-                onClick={() => handleSpeak(translation ? translation.word : item.text)}
-                className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
-                title="Pronounce"
+                  onClick={() => {
+                    // Combine Word + Definition for full reading
+                    // If translated, use translated word + translated definition
+                    const textToRead = translation 
+                        ? `${translation.word}. ${translation.definition}` 
+                        : `${item.text}. ${item.analysis?.definition}`;
+                    
+                    handleSpeak(textToRead);
+                  }}
+                  className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+                  title="Pronounce"
                 >
-                {isSpeaking ? <StopCircle size={20} /> : <Volume2 size={20} />}
+                  {isLoadingAudio ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : isSpeaking ? (
+                    <StopCircle size={20} />
+                  ) : (
+                    <Volume2 size={20} />
+                  )}
                 </button>
               </div>
             </div>
