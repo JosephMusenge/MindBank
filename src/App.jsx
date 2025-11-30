@@ -117,19 +117,23 @@ export default function App() {
     
     try {
       const prompt = `
-        Analyze this text: "${inputText}".
-        Determine if it is a single word/short idiom to be defined, or a quote/thought.
-        If it is a quote, try to identify the author and source (book/movie/speech) if known.
+        Analyze this spoken text: "${inputText}".
+        
+        TASK:
+        1. Determine if it is a single word/idiom definition, or a quote.
+        2. If it is a quote, look for spoken attribution cues like "by [Author]" or "from [Source]".
+        3. EXTRACT the actual quote content separately from the attribution.
         
         Return ONLY a JSON object with this schema:
         {
           "type": "word" | "quote",
+          "cleaned_text": "The content WITHOUT the 'by Author' part. Capitalize correctly.",
           "definition": "dictionary definition if word",
           "partOfSpeech": "noun/verb/etc if word",
           "example": "example sentence if word",
           "meaning": "explanation of the quote's significance if quote",
-          "author": "Author Name if known quote, else null",
-          "source": "Book Title/Source if known quote, else null",
+          "author": "Extracted Author Name (if spoken or known)",
+          "source": "Extracted Book/Source Title (if spoken or known)",
           "tags": ["array", "of", "3", "relevant", "tags"]
         }
       `;
@@ -155,7 +159,7 @@ export default function App() {
       // Save to TEMP state (Preview)
       setCaptureResult({
         id: 'temp-preview', 
-        text: inputText,
+        text: analysis.cleaned_text || inputText,
         analysis,
         type: analysis.type,
         author: analysis.author || '',
