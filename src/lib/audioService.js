@@ -1,9 +1,24 @@
-// src/lib/audioService.js
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+
+// memory cache to store downloaded audio
+// Key = "text-voice", Value = "blobUrl"
+const audioCache = new Map();
 
 export const playAiAudio = async (text, voice = 'alloy') => {
   if (!OPENAI_API_KEY) {
     throw new Error("Missing OpenAI API Key");
+  }
+
+  // generate a unique key for this specific request
+  const cacheKey = `${voice}-${text.trim()}`;
+
+  // check cache: If we have it, play immediately
+  if (audioCache.has(cacheKey)) {
+    console.log("Playing from cache (Instant)");
+    const audioUrl = audioCache.get(cacheKey);
+    const audio = new Audio(audioUrl);
+    await audio.play();
+    return audio;
   }
 
   try {
@@ -16,7 +31,7 @@ export const playAiAudio = async (text, voice = 'alloy') => {
       body: JSON.stringify({
         model: "tts-1", // The standard, fast model
         input: text,
-        voice: voice, // Options: alloy, echo, fable, onyx, nova, shimmer
+        voice: voice, 
       }),
     });
 
@@ -28,8 +43,9 @@ export const playAiAudio = async (text, voice = 'alloy') => {
 
     const audioBlob = await response.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
+    // save to cache for next time
+    audioCache.set(cacheKey, audioUrl);
     const audio = new Audio(audioUrl);
-    
     await audio.play();
     return audio;
 
