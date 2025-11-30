@@ -263,7 +263,7 @@ export default function App() {
       return !item.inQuotebook && item.type !== 'word';
     }
     if (filter === 'quotebook') return item.inQuotebook === true;
-    return item.type === filter; // 'word' tab shows words
+    return item.type === filter; 
   });
 
   const hasDeletableItems = items.some(item => !item.inQuotebook && item.type !== 'word');
@@ -508,9 +508,9 @@ export default function App() {
                 </div>
             </>
         )}
-
-        {/* --- SERENDIPITY SHUFFLE MODAL --- */}
-        {randomItem && (
+      </main>
+      {/* --- SERENDIPITY SHUFFLE MODAL --- */}
+      {randomItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
             {/* Dark Backdrop with Blur */}
             <div 
@@ -562,7 +562,6 @@ export default function App() {
             </div>
           </div>
         )}
-      </main>
     </div>
   );
 }
