@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut } from 'lucide-react';
+import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut, Dices, X } from 'lucide-react';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Toaster, toast } from 'sonner';
@@ -16,6 +16,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [items, setItems] = useState([]);
+  const [randomItem, setRandomItem] = useState(null);
   
   // State to hold the temporary result BEFORE saving
   const [captureResult, setCaptureResult] = useState(null);
@@ -300,6 +301,20 @@ export default function App() {
     );
   }
 
+  const handleShuffle = () => {
+    // filter for only "Saved" items (Quotes in Quotebook or Words in Dictionary)
+    const validItems = items.filter(item => item.inQuotebook || item.type === 'word');
+  
+    if (validItems.length === 0) {
+      toast.error("Your collection is empty. Save some items first!");
+      return;
+    }
+  
+    // Pick a random index
+    const randomIndex = Math.floor(Math.random() * validItems.length);
+    setRandomItem(validItems[randomIndex]);
+  };
+
   // main app 
   return (
     <div className="min-h-screen bg-[#FDFCF8] text-stone-900 font-sans pb-32 selection:bg-indigo-100 selection:text-indigo-900">
@@ -321,6 +336,17 @@ export default function App() {
               <button onClick={() => setFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'all' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-900 hover:bg-stone-200/50'}`}>Library</button>
               <button onClick={() => setFilter('quotebook')} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'quotebook' ? 'bg-white text-rose-600 shadow-sm' : 'text-stone-500 hover:text-rose-600 hover:bg-stone-200/50'}`}><Heart size={14} className={filter === 'quotebook' ? "fill-current" : ""} /> Quotebook</button>
               <button onClick={() => setFilter('word')} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${filter === 'word' ? 'bg-white text-indigo-600 shadow-sm' : 'text-stone-500 hover:text-indigo-600 hover:bg-stone-200/50'}`}>Dictionary</button>
+              {/* --- SHUFFLE BUTTON HERE --- */}
+              <div className="w-px h-6 bg-stone-200 mx-2 hidden sm:block self-center"></div> {/* Separator Line */}
+
+              <button 
+                onClick={handleShuffle}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold text-stone-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                title="Serendipity Shuffle"
+              >
+                <Dices size={18} />
+                <span className="hidden md:inline">Shuffle</span>
+              </button>
             </nav>
 
             <div className="flex items-center gap-2">
@@ -333,6 +359,14 @@ export default function App() {
                         <Eraser size={16} />
                     </button>
                 )}
+
+                <button 
+                    onClick={handleShuffle}
+                    className="sm:hidden w-9 h-9 flex items-center justify-center rounded-full transition-all hover:bg-stone-100 text-stone-400 hover:text-indigo-600"
+                    title="Shuffle"
+                >
+                    <Dices size={20} />
+                </button>
                 
                 {/* Logout Button */}
                 <button 
@@ -473,6 +507,60 @@ export default function App() {
                     </div>
                 </div>
             </>
+        )}
+
+        {/* --- SERENDIPITY SHUFFLE MODAL --- */}
+        {randomItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            {/* Dark Backdrop with Blur */}
+            <div 
+              className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm" 
+              onClick={() => setRandomItem(null)} // Click outside to close
+            ></div>
+
+            {/* The Modal Content */}
+            <div className="relative w-full max-w-xl z-10 animate-in zoom-in-95 duration-300">
+              {/* Close Button */}
+              <button 
+                onClick={() => setRandomItem(null)}
+                className="absolute -top-12 right-0 text-white/80 hover:text-white transition-colors"
+              >
+                <X size={32} />
+              </button>
+
+              {/* The Card Display */}
+              <div className="transform transition-all">
+                {randomItem.type === 'word' ? (
+                  <WordCard item={randomItem} isPreview={true} onSave={() => {}} onDiscard={() => {}} />
+                ) : (
+                  <QuoteCard 
+                    item={randomItem} 
+                    // We pass showInsight={true} to make sure the user sees the AI analysis
+                    showInsight={true} 
+                    // We disable editing in this view to keep it clean
+                    onUpdate={() => {}} 
+                    onDelete={() => {}} 
+                    onToggleQuotebook={() => {}}
+                    // Hide the standard save/discard buttons by passing mock functions
+                    isPreview={true} 
+                    onSave={() => {}} 
+                    onDiscard={() => {}}
+                  />
+                )}
+              </div>
+
+              {/* "Shuffle Again" Button */}
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={handleShuffle}
+                  className="flex items-center gap-3 px-8 py-4 bg-white text-stone-900 rounded-full font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all group"
+                >
+                  <Dices className="group-hover:rotate-180 transition-transform duration-500 text-indigo-600" />
+                  Shuffle Again
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>
