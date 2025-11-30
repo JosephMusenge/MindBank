@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Trash2, Sparkles, Quote, Heart, Edit2, Check, X, BookMarked, XCircle, Volume2, StopCircle, Share2, Copy, Download, Image as ImageIcon, Globe, Loader2  } from 'lucide-react';
 import { toast } from 'sonner';
 import { toPng } from 'html-to-image';
+import { playAiAudio } from '../lib/audioService';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
@@ -31,6 +32,8 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
 
   const [editAuthor, setEditAuthor] = useState(item.author || '');
   const [editSource, setEditSource] = useState(item.source || '');
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false); // NEW State
+  const audioRef = useRef(null);
 
   const handleSave = () => {
     onUpdate(item.id, { author: editAuthor, source: editSource });
@@ -38,18 +41,38 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
   };
 
   // Handle Text-to-Speech for quote and word readings
-  const handleSpeak = (textToSpeak) => {
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
+  const handleSpeak = async (textToSpeak) => {
+    if (isSpeaking || isLoadingAudio) {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
       setIsSpeaking(false);
+      setIsLoadingAudio(false);
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak || item.text);
-    utterance.rate = 0.9; 
-    utterance.onend = () => setIsSpeaking(false);
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+    // Start Loading
+    setIsLoadingAudio(true);
+
+    try {
+        const voice = item.inQuotebook ? 'onyx' : 'nova'; 
+      const audio = await playAiAudio(textToSpeak || item.text, voice);
+      
+      audioRef.current = audio;
+      setIsSpeaking(true);
+      setIsLoadingAudio(false);
+      // Reset state when audio finishes
+      audio.onended = () => {
+        setIsSpeaking(false);
+        audioRef.current = null;
+      };
+
+    } catch (error) {
+      toast.error("Could not generate AI audio. Check API Key.");
+      setIsLoadingAudio(false);
+      setIsSpeaking(false);
+    }
   };
 
   const handleTranslate = async (langName) => {
@@ -173,11 +196,17 @@ const QuoteCard = ({ item, onDelete, onUpdate, onToggleQuotebook, showInsight = 
                 </div>
 
                 <button 
-                  onClick={() => handleSpeak(translation ? translation.text : item.text)}
-                  className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
-                  title={translation ? "Read Translation" : "Read Aloud"}
+                    onClick={() => handleSpeak(translation ? translation.text : item.text)}
+                    className={`p-2 rounded-full transition-colors ${isSpeaking ? 'bg-indigo-100 text-indigo-600' : 'text-stone-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+                    title={translation ? "Read Translation" : "Read Aloud"}
                 >
-                  {isSpeaking ? <StopCircle size={18} /> : <Volume2 size={18} />}
+                    {isLoadingAudio ? (
+                    <Loader2 size={18} className="animate-spin" /> 
+                    ) : isSpeaking ? (
+                    <StopCircle size={18} /> 
+                    ) : (
+                    <Volume2 size={18} />
+                    )}
                 </button>
 
                 {/* Share Menu */}
