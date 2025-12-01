@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut, Dices, X, Search, Library, ArrowLeft, Book, Glasses, CheckCircle2, PenTool, BrainCircuit, StickyNote, Trash2 } from 'lucide-react';
+import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut, Dices, X, Search, Library, ArrowLeft, Book, Glasses, CheckCircle2, PenTool, BrainCircuit, StickyNote, Trash2, Home, AArrowUp } from 'lucide-react';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Toaster, toast } from 'sonner';
@@ -387,13 +387,6 @@ export default function App() {
               <button onClick={handleShuffle} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-400 hover:text-indigo-600"><Dices size={20} /></button>
               <button onClick={handleLogout} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-400 hover:text-stone-600"><LogOut size={18} /></button>
             </div>
-          </div>
-          {/* Mobile Nav Tabs */}
-          <div className="sm:hidden flex justify-around pb-3 px-4 border-t border-stone-100 pt-3 overflow-x-auto">
-          <button onClick={() => {setFilter('all'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'all' && !selectedBook ? 'text-stone-900 font-bold' : 'text-stone-400'}`}>Library</button>
-              <button onClick={() => {setFilter('quotebook'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'quotebook' ? 'text-rose-600 font-bold' : 'text-stone-400'}`}>Quotes</button>
-              <button onClick={() => {setFilter('bookshelf'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'bookshelf' || selectedBook ? 'text-amber-700 font-bold' : 'text-stone-400'}`}>Books</button>
-              <button onClick={() => {setFilter('word'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'word' ? 'text-indigo-600 font-bold' : 'text-stone-400'}`}>Words</button>
           </div>
         </header>
       )}
@@ -799,6 +792,49 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* --- MOBILE BOTTOM NAVIGATION --- */}
+      {/* Only visible on mobile (sm:hidden). Fixed to bottom. Glassmorphism effect. */}
+      {!isReadingMode && (
+        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-stone-200/60 pb-safe pt-2 px-6 flex justify-between items-center z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] h-20">
+          
+          {/* 1. FEED TAB */}
+          <button 
+            onClick={() => {setFilter('all'); setSelectedBook(null);}} 
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'all' && !selectedBook ? 'text-stone-900 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
+          >
+            <Home size={24} strokeWidth={filter === 'all' && !selectedBook ? 2.5 : 2} className={filter === 'all' && !selectedBook ? "fill-stone-900/10" : ""} />
+            <span className={`text-[10px] font-bold ${filter === 'all' && !selectedBook ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Feed</span>
+          </button>
+
+          {/* 2. QUOTES TAB */}
+          <button 
+            onClick={() => {setFilter('quotebook'); setSelectedBook(null);}} 
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'quotebook' ? 'text-rose-600 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
+          >
+            <Heart size={24} strokeWidth={filter === 'quotebook' ? 2.5 : 2} className={filter === 'quotebook' ? "fill-rose-600/10" : ""} />
+            <span className={`text-[10px] font-bold ${filter === 'quotebook' ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Quotes</span>
+          </button>
+
+          {/* 3. BOOKS TAB */}
+          <button 
+            onClick={() => {setFilter('bookshelf'); setSelectedBook(null);}} 
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'bookshelf' || selectedBook ? 'text-amber-700 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
+          >
+            <Library size={24} strokeWidth={filter === 'bookshelf' || selectedBook ? 2.5 : 2} className={filter === 'bookshelf' || selectedBook ? "fill-amber-700/10" : ""} />
+            <span className={`text-[10px] font-bold ${filter === 'bookshelf' || selectedBook ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Library</span>
+          </button>
+
+          {/* 4. WORDS TAB */}
+          <button 
+            onClick={() => {setFilter('word'); setSelectedBook(null);}} 
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'word' ? 'text-indigo-600 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
+          >
+            <AArrowUp size={24} strokeWidth={filter === 'word' ? 2.5 : 2} className={filter === 'word' ? "fill-indigo-600/10" : ""} />
+            <span className={`text-[10px] font-bold ${filter === 'word' ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Words</span>
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
