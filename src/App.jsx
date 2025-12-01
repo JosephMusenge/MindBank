@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut, Dices, X, Search, Library, ArrowLeft, Book, Glasses, CheckCircle2 } from 'lucide-react';
+import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut, Dices, X, Search, Library, ArrowLeft, Book, Glasses, CheckCircle2, PenTool, BrainCircuit, StickyNote, Trash2 } from 'lucide-react';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Toaster, toast } from 'sonner';
@@ -36,6 +36,10 @@ export default function App() {
   const [isSearchingBooks, setIsSearchingBooks] = useState(false);
   // reading mode state
   const [isReadingMode, setIsReadingMode] = useState(false);
+  // state for notes & insights
+  const [bookViewTab, setBookViewTab] = useState('quotes'); // 'quotes' | 'notes'
+  const [noteInput, setNoteInput] = useState('');
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
 
   // Auth Initialization
   useEffect(() => {
@@ -224,6 +228,74 @@ export default function App() {
     }
   };
 
+  // --- Save Note ---
+  const saveNote = async () => {
+    if (!noteInput.trim() || !user || !selectedBook) return;
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'mindbank_items'), {
+        type: 'note',
+        text: noteInput,
+        source: selectedBook.title,
+        author: selectedBook.author,
+        coverUrl: selectedBook.coverUrl,
+        createdAt: serverTimestamp()
+      });
+      setNoteInput('');
+      toast.success("Note added");
+    } catch (error) {
+      toast.error("Failed to save note");
+    }
+  };
+
+  // --- Generate AI Insight ---
+  const generateBookInsight = async () => {
+    if (!selectedBook || selectedBook.quotes.length === 0) {
+        return toast.error("Capture some quotes first!");
+    }
+    
+    setIsGeneratingInsight(true);
+    try {
+        const quotesText = selectedBook.quotes.map(q => `"${q.text}"`).join("\n");
+        const prompt = `
+            Analyze these quotes captured from the book "${selectedBook.title}" by ${selectedBook.author}:
+            ${quotesText}
+
+            TASK: Generate a "Book Insight" summary. 
+            1. Identify the core themes the user seems interested in based on these specific quotes.
+            2. Write a 2-sentence summary of the wisdom collected here.
+            
+            Return JSON: { "theme_analysis": "...", "summary": "..." }
+        `;
+
+        const response = await fetch(GEMINI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+
+        const data = await response.json();
+        const aiText = data.candidates[0].content.parts[0].text;
+        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+        const insight = JSON.parse(jsonMatch ? jsonMatch[0] : aiText);
+
+        await addDoc(collection(db, 'users', user.uid, 'mindbank_items'), {
+            type: 'insight',
+            text: insight.summary,
+            analysis: { meaning: insight.theme_analysis, tags: ['AI Insight'] },
+            source: selectedBook.title,
+            author: selectedBook.author,
+            coverUrl: selectedBook.coverUrl,
+            createdAt: serverTimestamp()
+        });
+        toast.success("Insight generated!");
+    } catch (error) {
+        console.error(error);
+        toast.error("Failed to generate insight");
+    } finally {
+        setIsGeneratingInsight(false);
+    }
+  };
+
   const updateItem = async (id, data) => updateDoc(doc(db, 'users', user.uid, 'mindbank_items', id), data);
   const deleteItem = async (id) => {
     await deleteDoc(doc(db, 'users', user.uid, 'mindbank_items', id));
@@ -243,18 +315,22 @@ export default function App() {
   // --- BOOKSHELF LOGIC (FEATURE #2) ---
   // Group quotes by source field
   const bookshelf = items
-    .filter(item => item.type === 'quote' && item.source) // Only quotes with a source
+    .filter(item => item.source && (item.type === 'quote' || item.type === 'note' || item.type === 'insight'))
     .reduce((acc, item) => {
       const key = item.source.trim();
       if (!acc[key]) {
         acc[key] = {
           title: key,
           author: item.author,
-          coverUrl: item.coverUrl, // New field added
-          quotes: []
+          coverUrl: item.coverUrl, 
+          quotes: [],
+          notes: [],
+          insights: []
         };
       }
-      acc[key].quotes.push(item);
+      if (item.type === 'quote') acc[key].quotes.push(item);
+      if (item.type === 'note') acc[key].notes.push(item);
+      if (item.type === 'insight') acc[key].insights.push(item);
       return acc;
     }, {});
   
@@ -262,8 +338,14 @@ export default function App() {
 
   // Filter Logic
   const filteredItems = items.filter(item => {
-    if (selectedBook) return item.source === selectedBook.title; // Show only selected book items
-    if (filter === 'all') return !item.inQuotebook && item.type !== 'word';
+    if (selectedBook) {
+      // If inside a book, filter by tab
+      if (item.source !== selectedBook.title) return false;
+      if (bookViewTab === 'quotes') return item.type === 'quote';
+      if (bookViewTab === 'notes') return item.type === 'note' || item.type === 'insight';
+      return false;
+    }
+    if (filter === 'all') return !item.inQuotebook && item.type !== 'word' && item.type !== 'note' && item.type !== 'insight';
     if (filter === 'quotebook') return item.inQuotebook === true;
     if (filter === 'word') return item.type === 'word';
     return true; 
@@ -308,10 +390,10 @@ export default function App() {
           </div>
           {/* Mobile Nav Tabs */}
           <div className="sm:hidden flex justify-around pb-3 px-4 border-t border-stone-100 pt-3 overflow-x-auto">
-              <button onClick={() => setFilter('all')} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'all' ? 'text-stone-900' : 'text-stone-400'}`}>Library</button>
-              <button onClick={() => setFilter('quotebook')} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'quotebook' ? 'text-rose-600' : 'text-stone-400'}`}>Quotes</button>
-              <button onClick={() => setFilter('bookshelf')} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'bookshelf' ? 'text-amber-700' : 'text-stone-400'}`}>Books</button>
-              <button onClick={() => setFilter('word')} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'word' ? 'text-indigo-600' : 'text-stone-400'}`}>Words</button>
+          <button onClick={() => {setFilter('all'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'all' && !selectedBook ? 'text-stone-900 font-bold' : 'text-stone-400'}`}>Library</button>
+              <button onClick={() => {setFilter('quotebook'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'quotebook' ? 'text-rose-600 font-bold' : 'text-stone-400'}`}>Quotes</button>
+              <button onClick={() => {setFilter('bookshelf'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'bookshelf' || selectedBook ? 'text-amber-700 font-bold' : 'text-stone-400'}`}>Books</button>
+              <button onClick={() => {setFilter('word'); setSelectedBook(null);}} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'word' ? 'text-indigo-600 font-bold' : 'text-stone-400'}`}>Words</button>
           </div>
         </header>
       )}
@@ -370,38 +452,122 @@ export default function App() {
         {/* --- Selected book view --- */}
         {selectedBook && (
             <div className="animate-in fade-in duration-300">
-                <button onClick={() => setSelectedBook(null)} className="flex items-center gap-2 text-stone-500 hover:text-stone-900 mb-6 font-medium transition-colors">
-                    <ArrowLeft size={18} /> Back to Shelf
-                </button>
-                <div className="flex items-start gap-6 mb-8">
-                    {/* Big Cover */}
-                    <div className="w-24 sm:w-32 aspect-[2/3] rounded-lg shadow-lg overflow-hidden shrink-0 bg-stone-200">
-                        {selectedBook.coverUrl ? (
-                            <img src={selectedBook.coverUrl} className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-stone-800 text-stone-500"><Book size={32} /></div>
-                        )}
-                    </div>
-                    <div>
-                        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-stone-900 mb-2 leading-tight">{selectedBook.title}</h2>
-                        <p className="text-lg text-stone-500 mb-4">{selectedBook.author}</p>
-                        <div className="flex gap-2">
-                             <span className="bg-stone-100 text-stone-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">{selectedBook.quotes.length} Quotes Saved</span>
-                             {/* Reading Mode trigger */}
-                             <button 
+                {!isReadingMode && (
+                  <>
+                    <button onClick={() => setSelectedBook(null)} className="flex items-center gap-2 text-stone-500 hover:text-stone-900 mb-6 font-medium transition-colors">
+                        <ArrowLeft size={18} /> Back to Shelf
+                    </button>
+                    <div className="flex items-start gap-6 mb-8">
+                        <div className="w-24 sm:w-32 aspect-[2/3] rounded-lg shadow-lg overflow-hidden shrink-0 bg-stone-200">
+                            {selectedBook.coverUrl ? (
+                                <img src={selectedBook.coverUrl} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-stone-800 text-stone-500"><Book size={32} /></div>
+                            )}
+                        </div>
+                        <div className="flex-1">
+                            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-stone-900 mb-2 leading-tight">{selectedBook.title}</h2>
+                            <p className="text-lg text-stone-500 mb-4">{selectedBook.author}</p>
+                            
+                            <div className="flex flex-wrap gap-3 mb-6">
+                                <button 
                                     onClick={() => setIsReadingMode(true)}
-                                    className="flex items-center gap-2 px-4 py-1.5 bg-stone-900 text-white rounded-full text-xs font-bold hover:scale-105 transition-transform shadow-lg shadow-stone-300"
+                                    className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-full text-sm font-bold hover:scale-105 transition-transform shadow-lg shadow-stone-300"
                                 >
-                                    <Glasses size={14} /> Enter Reading Mode
+                                    <Glasses size={16} /> Reading Mode
                                 </button>
+                            </div>
+
+                            {/* TABS */}
+                            <div className="flex border-b border-stone-200">
+                                <button 
+                                    onClick={() => setBookViewTab('quotes')}
+                                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${bookViewTab === 'quotes' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
+                                >
+                                    Quotes ({selectedBook.quotes.length})
+                                </button>
+                                <button 
+                                    onClick={() => setBookViewTab('notes')}
+                                    className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${bookViewTab === 'notes' ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-400 hover:text-stone-600'}`}
+                                >
+                                    Notes & Insights ({selectedBook.notes.length + selectedBook.insights.length})
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div className={`space-y-6 ${isReadingMode ? 'opacity-40 pointer-events-none' : ''}`}>
-                    {filteredItems.map(item => (
-                        <QuoteCard key={item.id} item={item} onDelete={deleteItem} onUpdate={updateItem} onToggleQuotebook={toggleQuotebook} />
-                    ))}
-                </div>
+                  </>
+                )}
+
+                {/* --- Book Content area --- */}
+                {bookViewTab === 'quotes' || isReadingMode ? (
+                    <div className={`space-y-6 ${isReadingMode ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {filteredItems.map(item => (
+                            <QuoteCard key={item.id} item={item} onDelete={deleteItem} onUpdate={updateItem} onToggleQuotebook={toggleQuotebook} />
+                        ))}
+                    </div>
+                ) : (
+                    // --- Notes Tab Content ---
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                        {/* New Note Input */}
+                        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+                            <textarea 
+                                value={noteInput}
+                                onChange={(e) => setNoteInput(e.target.value)}
+                                placeholder="Write a reflection, summary, or thought..."
+                                className="w-full bg-transparent outline-none text-stone-800 placeholder:text-stone-300 resize-none mb-3"
+                                rows={3}
+                            />
+                            <div className="flex justify-between items-center">
+                                <button 
+                                    onClick={generateBookInsight}
+                                    disabled={isGeneratingInsight}
+                                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors"
+                                >
+                                    {isGeneratingInsight ? <Loader2 className="animate-spin" size={14} /> : <BrainCircuit size={14} />}
+                                    Generate AI Insight
+                                </button>
+                                <button 
+                                    onClick={saveNote}
+                                    disabled={!noteInput.trim()}
+                                    className="px-4 py-1.5 bg-stone-900 text-white text-sm font-bold rounded-lg hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Save Note
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* List of Notes/Insights */}
+                        {filteredItems.map(item => (
+                            <div key={item.id} className={`p-6 rounded-2xl border ${item.type === 'insight' ? 'bg-indigo-50/50 border-indigo-100' : 'bg-white border-stone-100'} shadow-sm relative group`}>
+                                {item.type === 'insight' && (
+                                    <div className="flex items-center gap-2 mb-3 text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                                        <Sparkles size={14} /> AI Book Insight
+                                    </div>
+                                )}
+                                <p className="text-stone-700 whitespace-pre-wrap leading-relaxed">{item.text}</p>
+                                
+                                {item.analysis?.meaning && (
+                                    <div className="mt-3 pt-3 border-t border-indigo-100/50 text-sm text-indigo-800/80">
+                                        <span className="font-bold">Themes:</span> {item.analysis.meaning}
+                                    </div>
+                                )}
+
+                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => deleteItem(item.id)} className="text-stone-300 hover:text-red-400"><Trash2 size={16}/></button>
+                                </div>
+                                <div className="mt-4 text-xs text-stone-300 font-medium">
+                                    {item.createdAt?.toDate().toLocaleDateString()}
+                                </div>
+                            </div>
+                        ))}
+                        
+                        {filteredItems.length === 0 && (
+                            <div className="text-center py-10">
+                                <p className="text-stone-400 text-sm">No notes yet. Write a thought or ask AI to summarize your quotes.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         )}
 
