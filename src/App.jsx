@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut, Dices, X, Search, Library, ArrowLeft, Book } from 'lucide-react';
+import { Mic, Square, BookOpen, Loader2, Volume2, Sparkles, Heart, Eraser, Feather, LogIn, LogOut, Dices, X, Search, Library, ArrowLeft, Book, Glasses, CheckCircle2 } from 'lucide-react';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Toaster, toast } from 'sonner';
@@ -34,6 +34,8 @@ export default function App() {
   const [bookQuery, setBookQuery] = useState('');
   const [bookResults, setBookResults] = useState([]);
   const [isSearchingBooks, setIsSearchingBooks] = useState(false);
+  // reading mode state
+  const [isReadingMode, setIsReadingMode] = useState(false);
 
   // Auth Initialization
   useEffect(() => {
@@ -155,27 +157,12 @@ export default function App() {
     setIsProcessing(true);
     
     try {
-      const prompt = `
-        Analyze this spoken text: "${inputText}".
-        
-        TASK:
-        1. Determine if it is a single word/idiom definition, or a quote.
-        2. If it is a quote, look for spoken attribution cues like "by [Author]" or "from [Source]".
-        3. EXTRACT the actual quote content separately from the attribution.
-        
-        Return ONLY a JSON object with this schema:
-        {
-          "type": "word" | "quote",
-          "cleaned_text": "The content WITHOUT the 'by Author' part. Capitalize correctly.",
-          "definition": "dictionary definition if word",
-          "partOfSpeech": "noun/verb/etc if word",
-          "example": "example sentence if word",
-          "meaning": "explanation of the quote's significance if quote",
-          "author": "Extracted Author Name (if spoken or known)",
-          "source": "Extracted Book/Source Title (if spoken or known)",
-          "tags": ["array", "of", "3", "relevant", "tags"]
-        }
-      `;
+      // If we are in Reading Mode (selectedBook exists), we hint the AI
+      const contextPrompt = selectedBook 
+        ? `CONTEXT: The user is reading the book "${selectedBook.title}" by "${selectedBook.author}". Assume the text comes from this book unless specified otherwise.`
+        : '';
+
+      const prompt = `Analyze: "${inputText}". ${contextPrompt} Return JSON: { "type": "word"|"quote", "cleaned_text": "...", "definition": "...", "partOfSpeech": "...", "example": "...", "meaning": "...", "author": "...", "source": "...", "tags": [] }`;
 
       const response = await fetch(GEMINI_URL, {
         method: 'POST',
@@ -186,15 +173,14 @@ export default function App() {
       });
 
       const data = await response.json();
-      
-      if (!data.candidates || !data.candidates[0]?.content) {
-        throw new Error("AI Analysis failed");
-      }
-
       const aiText = data.candidates[0].content.parts[0].text;
       const jsonMatch = aiText.match(/\{[\s\S]*\}/);
       const analysis = JSON.parse(jsonMatch ? jsonMatch[0] : aiText);
-
+      // AUTO-LINKING: If a book is selected, force the metadata to match
+      if (selectedBook) {
+        analysis.source = selectedBook.title;
+        analysis.author = selectedBook.author;
+      }
       // Save to TEMP state (Preview)
       setCaptureResult({
         id: 'temp-preview', 
@@ -203,10 +189,10 @@ export default function App() {
         type: analysis.type,
         author: analysis.author || '',
         source: analysis.source || '',
+        coverUrl: selectedBook?.coverUrl || null,
         inQuotebook: false, 
         createdAt: new Date()
       });
-
       setInputText('');
     } catch (error) {
       console.error("Analysis failed:", error);
@@ -297,7 +283,8 @@ export default function App() {
       <Toaster position="bottom-center" richColors />
       
       {/* Header */}
-      <header className="sticky top-0 z-20 backdrop-blur-md bg-[#FDFCF8]/90 border-b border-stone-200/60 transition-all">
+      {(!isReadingMode &&
+        <header className="sticky top-0 z-20 backdrop-blur-md bg-[#FDFCF8]/90 border-b border-stone-200/60 transition-all">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 text-stone-800" onClick={() => {setFilter('all'); setSelectedBook(null);}}>
               <div className="w-9 h-9 bg-stone-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-stone-200">
@@ -326,7 +313,28 @@ export default function App() {
               <button onClick={() => setFilter('bookshelf')} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'bookshelf' ? 'text-amber-700' : 'text-stone-400'}`}>Books</button>
               <button onClick={() => setFilter('word')} className={`text-sm font-medium whitespace-nowrap px-2 ${filter === 'word' ? 'text-indigo-600' : 'text-stone-400'}`}>Words</button>
           </div>
-      </header>
+        </header>
+      )}
+
+      {/* READING MODE HEADER */}
+      {isReadingMode && selectedBook && (
+         <div className="sticky top-0 z-30 bg-stone-900 text-white shadow-xl">
+             <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                     <div className="w-8 h-8 rounded overflow-hidden bg-stone-700">
+                         {selectedBook.coverUrl && <img src={selectedBook.coverUrl} className="w-full h-full object-cover" />}
+                     </div>
+                     <div>
+                         <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Reading Session</p>
+                         <p className="text-sm font-bold line-clamp-1">{selectedBook.title}</p>
+                     </div>
+                 </div>
+                 <button onClick={() => setIsReadingMode(false)} className="px-4 py-2 bg-stone-800 hover:bg-stone-700 rounded-full text-xs font-bold transition-colors">
+                     Done Reading
+                 </button>
+             </div>
+         </div>
+      )}
 
       {/* Main Container */}
       <main className={`max-w-3xl mx-auto px-4 ${isIdleCentered ? 'min-h-[75vh] flex flex-col justify-center' : 'py-8 space-y-8'}`}>
@@ -379,10 +387,17 @@ export default function App() {
                         <p className="text-lg text-stone-500 mb-4">{selectedBook.author}</p>
                         <div className="flex gap-2">
                              <span className="bg-stone-100 text-stone-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">{selectedBook.quotes.length} Quotes Saved</span>
+                             {/* Reading Mode trigger */}
+                             <button 
+                                    onClick={() => setIsReadingMode(true)}
+                                    className="flex items-center gap-2 px-4 py-1.5 bg-stone-900 text-white rounded-full text-xs font-bold hover:scale-105 transition-transform shadow-lg shadow-stone-300"
+                                >
+                                    <Glasses size={14} /> Enter Reading Mode
+                                </button>
                         </div>
                     </div>
                 </div>
-                <div className="space-y-6">
+                <div className={`space-y-6 ${isReadingMode ? 'opacity-40 pointer-events-none' : ''}`}>
                     {filteredItems.map(item => (
                         <QuoteCard key={item.id} item={item} onDelete={deleteItem} onUpdate={updateItem} onToggleQuotebook={toggleQuotebook} />
                     ))}
@@ -392,7 +407,7 @@ export default function App() {
 
 
         {/* --- Standard Input Area (Hidden on Bookshelf) --- */}
-        {filter !== 'bookshelf' && !selectedBook && !captureResult && (
+        {!isReadingMode && filter !== 'bookshelf' && !selectedBook && !captureResult && (
              <div className={`relative group animate-in fade-in duration-700 ${isIdleCentered ? 'w-full transform -translate-y-8' : ''}`}>
                 <div className="relative bg-white rounded-3xl shadow-xl shadow-indigo-900/5 border border-stone-100 p-1 overflow-hidden">
                     <textarea
@@ -416,7 +431,7 @@ export default function App() {
         )}
 
         {/* --- Empty State --- */}
-        {isIdleCentered && (
+        {isIdleCentered && !isReadingMode && (
              <div className="text-center animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
                 <p className="text-stone-300 font-medium flex items-center justify-center gap-2">
                     <Feather className="w-4 h-4" /> Ready for the next thought.
@@ -425,7 +440,7 @@ export default function App() {
         )}
 
         {/* --- Preview Area with book search --- */}
-        {captureResult && (
+        {captureResult && !isReadingMode && (
            <div className="animate-in fade-in zoom-in-95 duration-300">
               <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xs font-bold text-stone-400 uppercase tracking-wider flex items-center gap-2">
@@ -462,6 +477,65 @@ export default function App() {
             </div>
         )}
       </main>
+
+      {/* --- FEATURE #3: READING MODE FLOATING CONTROLS --- */}
+      {isReadingMode && (
+         <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent pt-12 z-40">
+            <div className="max-w-xl mx-auto flex items-end gap-3">
+                 {/* 1. TEXT INPUT (AUTO EXPANDING) */}
+                 <div className="flex-1 bg-white rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-100 flex items-center p-2">
+                     <textarea
+                         value={inputText}
+                         onChange={(e) => setInputText(e.target.value)}
+                         placeholder="Speak or type quote..."
+                         className="flex-1 max-h-32 bg-transparent border-none outline-none text-lg px-3 py-2 resize-none placeholder:text-stone-300"
+                         rows={1}
+                     />
+                     {inputText.trim() && (
+                         <button 
+                            onClick={analyzeAndPreview}
+                            disabled={isProcessing}
+                            className="bg-stone-900 text-white p-2 rounded-full hover:scale-105 transition-transform"
+                         >
+                             {isProcessing ? <Loader2 className="animate-spin" size={20}/> : <Sparkles size={20}/>}
+                         </button>
+                     )}
+                 </div>
+
+                 {/* 2. MIC BUTTON (FAB) */}
+                 <button 
+                    onClick={toggleRecording}
+                    className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse scale-110' : 'bg-stone-900 text-white hover:scale-105'}`}
+                 >
+                     {isRecording ? <Square fill="currentColor" size={24}/> : <Mic size={24}/>}
+                 </button>
+            </div>
+         </div>
+      )}
+
+      {/* --- READING MODE PREVIEW (BOTTOM SHEET) --- */}
+      {isReadingMode && captureResult && (
+         <div className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-6 animate-in slide-in-from-bottom-full duration-300 max-w-3xl mx-auto border-t border-stone-100">
+             <div className="flex items-start gap-4">
+                 <div className="flex-1">
+                     <p className="text-xs font-bold text-stone-400 uppercase mb-2">Captured from {selectedBook?.title}</p>
+                     <p className="text-xl font-serif text-stone-900 mb-4">"{captureResult.text}"</p>
+                     <div className="flex gap-2">
+                         <span className="bg-stone-100 text-stone-600 px-2 py-1 rounded text-xs">#{captureResult.analysis?.tags?.[0] || 'quote'}</span>
+                     </div>
+                 </div>
+                 <div className="flex flex-col gap-2">
+                     <button onClick={() => saveToLibrary(true)} className="flex items-center gap-2 px-6 py-3 bg-stone-900 text-white rounded-xl font-bold hover:bg-stone-800 transition-colors shadow-lg shadow-stone-200">
+                         <CheckCircle2 size={18} /> Save
+                     </button>
+                     <button onClick={() => setCaptureResult(null)} className="flex items-center justify-center gap-2 px-6 py-3 bg-stone-100 text-stone-500 rounded-xl font-bold hover:bg-stone-200 transition-colors">
+                         Discard
+                     </button>
+                 </div>
+             </div>
+         </div>
+      )}
+
       {/* --- BOOK SEARCH MODAL --- */}
       {showBookSearch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
