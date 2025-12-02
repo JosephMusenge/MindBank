@@ -361,6 +361,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#FDFCF8] text-stone-900 font-sans pb-32">
       <div className="paper-texture"></div>
+      {/* better and modern background glow */}
+      <div className="ambient-orb w-[500px] h-[500px] bg-blue-100/50 -top-20 -left-20"></div>
+      <div className="ambient-orb w-[400px] h-[400px] bg-violet-100/50 top-40 -right-20 animation-delay-2000"></div>
+      <div className="ambient-orb w-[300px] h-[300px] bg-teal-50/50 bottom-0 left-20"></div>
       {/* Toast Notification Container */}
       <Toaster position="bottom-center" richColors />
       
@@ -414,7 +418,7 @@ export default function App() {
       {/* Main Container */}
       <main className={`max-w-3xl mx-auto px-4 ${isIdleCentered ? 'min-h-[75vh] flex flex-col justify-center' : 'py-8 space-y-8'}`}>
         
-        {/* --- Bookshelf View --- */}
+        {/* Bookshelf View */}
         {filter === 'bookshelf' && !selectedBook && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex items-center justify-between mb-6">
@@ -566,23 +570,44 @@ export default function App() {
 
 
         {/* --- Standard Input Area (Hidden on Bookshelf) --- */}
+        {/* --- MODERN INPUT AREA --- */}
         {!isReadingMode && filter !== 'bookshelf' && !selectedBook && !captureResult && (
              <div className={`relative group animate-in fade-in duration-700 ${isIdleCentered ? 'w-full transform -translate-y-8' : ''}`}>
-                <div className="relative bg-white rounded-3xl shadow-xl shadow-indigo-900/5 border border-stone-100 p-1 overflow-hidden">
+                {/* Glass Container */}
+                <div className="relative bg-white/60 backdrop-blur-xl rounded-[2rem] shadow-[0_8px_32px_rgba(0,0,0,0.04)] border border-white/50 p-2 overflow-hidden hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)] transition-all duration-500">
+                    
+                    {/* Text Area */}
                     <textarea
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
-                        placeholder="What's on your mind? Capture a quote..."
-                        className="w-full p-5 text-lg text-stone-800 placeholder:text-stone-300 outline-none resize-none bg-transparent font-medium leading-relaxed"
+                        placeholder="Capture a thought..."
+                        className="w-full px-5 py-4 text-lg text-stone-800 placeholder:text-stone-400/70 outline-none resize-none bg-transparent font-serif leading-relaxed"
                         rows={isIdleCentered ? 2 : 3}
                     />
-                    <div className="flex items-center justify-between px-4 pb-3 bg-white rounded-b-2xl">
-                        <button onClick={toggleRecording} className={`flex items-center justify-center w-10 h-10 rounded-full transition-all ${isRecording ? 'bg-rose-50 text-rose-500 animate-pulse' : 'bg-stone-50 text-stone-400 hover:bg-stone-100'}`}>
-                             {isRecording ? <Square size={18} fill="currentColor" /> : <Mic size={20} />}
+
+                    {/* Action Bar */}
+                    <div className="flex items-center justify-between px-3 pb-2 pt-2">
+                        {/* Mic Button - Neumorphic Style */}
+                        <button 
+                            onClick={toggleRecording} 
+                            className={`flex items-center justify-center w-12 h-12 rounded-full transition-all duration-300 ${isRecording ? 'bg-rose-500 text-white shadow-lg shadow-rose-200 scale-110' : 'bg-white text-stone-400 hover:text-stone-600 shadow-sm border border-stone-100'}`}
+                        >
+                             {isRecording ? <Square size={20} fill="currentColor" /> : <Mic size={22} />}
                         </button>
-                        <button onClick={analyzeAndPreview} disabled={!inputText.trim() || isProcessing} className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-sm tracking-wide transition-all ${!inputText.trim() ? 'bg-stone-100 text-stone-300' : 'bg-stone-900 text-white hover:bg-stone-800 shadow-lg'}`}>
+
+                        {/* Capture Button - Modern Gradient */}
+                        <button 
+                            onClick={analyzeAndPreview} 
+                            disabled={!inputText.trim() || isProcessing} 
+                            className={`
+                                flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm tracking-wide transition-all duration-300
+                                ${!inputText.trim() 
+                                    ? 'bg-stone-100 text-stone-300 cursor-not-allowed' 
+                                    : 'bg-gradient-to-r from-stone-900 to-stone-800 text-white shadow-lg shadow-stone-200 hover:scale-105 active:scale-95'}
+                            `}
+                        >
                             {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-                            <span>{isProcessing ? 'THINKING' : 'CAPTURE'}</span>
+                            <span>{isProcessing ? 'Thinking...' : 'Capture'}</span>
                         </button>
                     </div>
                 </div>
@@ -637,7 +662,7 @@ export default function App() {
         )}
       </main>
 
-      {/* --- FEATURE #3: READING MODE FLOATING CONTROLS --- */}
+      {/* READING MODE FLOATING CONTROLS */}
       {isReadingMode && (
          <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent pt-12 z-40">
             <div className="max-w-xl mx-auto flex items-end gap-3">
@@ -661,7 +686,7 @@ export default function App() {
                      )}
                  </div>
 
-                 {/* 2. MIC BUTTON (FAB) */}
+                 {/* MIC BUTTON (FAB) */}
                  <button 
                     onClick={toggleRecording}
                     className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all ${isRecording ? 'bg-rose-500 text-white animate-pulse scale-110' : 'bg-stone-900 text-white hover:scale-105'}`}
@@ -794,46 +819,56 @@ export default function App() {
         )}
 
         {/* --- MOBILE BOTTOM NAVIGATION --- */}
-      {/* Only visible on mobile (sm:hidden). Fixed to bottom. Glassmorphism effect. */}
-      {!isReadingMode && (
-        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-stone-200/60 pb-safe pt-2 px-6 flex justify-between items-center z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.03)] h-20">
-          
-          {/* 1. FEED TAB */}
-          <button 
-            onClick={() => {setFilter('all'); setSelectedBook(null);}} 
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'all' && !selectedBook ? 'text-stone-900 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
-          >
-            <Home size={24} strokeWidth={filter === 'all' && !selectedBook ? 2.5 : 2} className={filter === 'all' && !selectedBook ? "fill-stone-900/10" : ""} />
-            <span className={`text-[10px] font-bold ${filter === 'all' && !selectedBook ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Feed</span>
-          </button>
+        {!isReadingMode && (
+        <div className="sm:hidden fixed bottom-6 left-0 right-0 z-50 px-6 flex justify-center">
+            <nav className="flex items-center gap-6 px-6 py-3 bg-stone-900 backdrop-blur-xl rounded-full shadow-2xl shadow-stone-300/20 border border-white/10 text-white transition-all">
+                
+                {/* FEED TAB */}
+                <button 
+                    onClick={() => {setFilter('all'); setSelectedBook(null);}} 
+                    className={`
+                        relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
+                        ${filter === 'all' && !selectedBook ? 'bg-white text-stone-900 shadow-lg' : 'text-stone-400 hover:text-white'}
+                    `}
+                >
+                    <Home size={20} strokeWidth={2.5} />
+                </button>
 
-          {/* 2. QUOTES TAB */}
-          <button 
-            onClick={() => {setFilter('quotebook'); setSelectedBook(null);}} 
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'quotebook' ? 'text-rose-600 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
-          >
-            <Heart size={24} strokeWidth={filter === 'quotebook' ? 2.5 : 2} className={filter === 'quotebook' ? "fill-rose-600/10" : ""} />
-            <span className={`text-[10px] font-bold ${filter === 'quotebook' ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Quotes</span>
-          </button>
+                {/* QUOTES TAB */}
+                <button 
+                    onClick={() => {setFilter('quotebook'); setSelectedBook(null);}} 
+                    className={`
+                        relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
+                        ${filter === 'quotebook' ? 'bg-rose-500 text-white shadow-lg shadow-rose-900/20' : 'text-stone-400 hover:text-white'}
+                    `}
+                >
+                    <Heart size={20} strokeWidth={2.5} fill={filter === 'quotebook' ? "currentColor" : "none"} />
+                </button>
 
-          {/* 3. BOOKS TAB */}
-          <button 
-            onClick={() => {setFilter('bookshelf'); setSelectedBook(null);}} 
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'bookshelf' || selectedBook ? 'text-amber-700 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
-          >
-            <Library size={24} strokeWidth={filter === 'bookshelf' || selectedBook ? 2.5 : 2} className={filter === 'bookshelf' || selectedBook ? "fill-amber-700/10" : ""} />
-            <span className={`text-[10px] font-bold ${filter === 'bookshelf' || selectedBook ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Library</span>
-          </button>
+                {/* 3. BOOKS TAB */}
+                <button 
+                    onClick={() => {setFilter('bookshelf'); setSelectedBook(null);}} 
+                    className={`
+                        relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
+                        ${filter === 'bookshelf' || selectedBook ? 'bg-amber-500 text-white shadow-lg shadow-amber-900/20' : 'text-stone-400 hover:text-white'}
+                    `}
+                >
+                    <Library size={20} strokeWidth={2.5} />
+                </button>
 
-          {/* 4. WORDS TAB */}
-          <button 
-            onClick={() => {setFilter('word'); setSelectedBook(null);}} 
-            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all duration-300 ${filter === 'word' ? 'text-indigo-600 -translate-y-1' : 'text-stone-400 hover:text-stone-600'}`}
-          >
-            <AArrowUp size={24} strokeWidth={filter === 'word' ? 2.5 : 2} className={filter === 'word' ? "fill-indigo-600/10" : ""} />
-            <span className={`text-[10px] font-bold ${filter === 'word' ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>Words</span>
-          </button>
-        </nav>
+                {/* 4. WORDS TAB */}
+                <button 
+                    onClick={() => {setFilter('word'); setSelectedBook(null);}} 
+                    className={`
+                        relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90
+                        ${filter === 'word' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-stone-400 hover:text-white'}
+                    `}
+                >
+                    <AArrowUp size={22} strokeWidth={2.5} />
+                </button>
+
+            </nav>
+        </div>
       )}
     </div>
   );
