@@ -13,18 +13,18 @@ export default defineConfig({
         name: 'MindBank',
         short_name: 'MindBank',
         description: 'Your personal knowledge archive for quotes and wisdom.',
-        theme_color: '#1c1917', // Matches your bg-stone-900 header
+        theme_color: '#1c1917', 
         background_color: '#FDFCF8',
-        display: 'standalone', // This removes the browser URL bar!
+        display: 'standalone', // removes the browser URL bar!
         orientation: 'portrait',
         icons: [
           {
-            src: 'pwa-192x192.png', // You must have this file in /public
+            src: 'android-chrome-192x192.png', 
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png', // You must have this file in /public
+            src: 'android-chrome-512x512.png',
             sizes: '512x512',
             type: 'image/png'
           }
