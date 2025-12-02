@@ -773,8 +773,9 @@ export default function App() {
               onClick={() => setRandomItem(null)} // Click outside to close
             ></div>
 
-            {/* The Modal Content */}
-            <div className="relative w-full max-w-xl z-10 animate-in zoom-in-95 duration-300">
+            {/* The Modal Content - NOW WITH MAX HEIGHT AND FLEX LAYOUT */}
+            <div className="relative w-full max-w-xl z-10 animate-in zoom-in-95 duration-300 flex flex-col max-h-[80vh]">
+              
               {/* Close Button */}
               <button 
                 onClick={() => setRandomItem(null)}
@@ -783,29 +784,29 @@ export default function App() {
                 <X size={32} />
               </button>
 
-              {/* The Card Display */}
-              <div className="transform transition-all">
-                {randomItem.type === 'word' ? (
-                  <WordCard item={randomItem} isPreview={true} onSave={() => {}} onDiscard={() => {}} />
-                ) : (
-                  <QuoteCard 
-                    item={randomItem} 
-                    // We pass showInsight={true} to make sure the user sees the AI analysis
-                    showInsight={true} 
-                    // We disable editing in this view to keep it clean
-                    onUpdate={() => {}} 
-                    onDelete={() => {}} 
-                    onToggleQuotebook={() => {}}
-                    // Hide the standard save/discard buttons by passing mock functions
-                    isPreview={true} 
-                    onSave={() => {}} 
-                    onDiscard={() => {}}
-                  />
-                )}
+              {/* SCROLLABLE CARD AREA */}
+              {/* padding-4 ensures the card shadow doesn't get cut off */}
+              <div className="overflow-y-auto p-4 no-scrollbar">
+                <div className="transform transition-all">
+                    {randomItem.type === 'word' ? (
+                    <WordCard item={randomItem} isPreview={true} onSave={() => {}} onDiscard={() => {}} />
+                    ) : (
+                    <QuoteCard 
+                        item={randomItem} 
+                        showInsight={false} 
+                        onUpdate={() => {}} 
+                        onDelete={() => {}} 
+                        onToggleQuotebook={() => {}}
+                        isPreview={true} 
+                        onSave={() => {}} 
+                        onDiscard={() => {}}
+                    />
+                    )}
+                </div>
               </div>
 
-              {/* "Shuffle Again" Button */}
-              <div className="mt-8 flex justify-center">
+              {/* "Shuffle Again" Button - ALWAYS VISIBLE AT BOTTOM */}
+              <div className="mt-2 flex justify-center shrink-0 pb-2">
                 <button
                   onClick={handleShuffle}
                   className="flex items-center gap-3 px-8 py-4 bg-white text-stone-900 rounded-full font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all group"
